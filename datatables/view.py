@@ -4,6 +4,7 @@ from abc import ABCMeta, abstractmethod
 from django.views.generic import View
 from django.http import JsonResponse
 from django.db.models.query import QuerySet
+from django.db.models import Q
 from django.core.exceptions import ImproperlyConfigured
 
 
@@ -29,7 +30,10 @@ class TableParamsMixin(object):
     @property
     def sort_field(self):
         order_label = '-' if self.order == 'desc' else ''
-        return '{}{}'.format(order_label, self.sort_columns[int(self._args['order[0][column]'])])
+        return '{}{}'.format(
+            order_label,
+            self.sort_columns[int(self._args['order[0][column]'])]
+        )
 
     @property
     def order(self):
@@ -53,15 +57,17 @@ class DataTableView(TableParamsMixin, View, metaclass=ABCMeta):
 
     queryset = None
     model = None
+    search_fields = []
 
     def get(self, request, *args, **kwargs):
         queryset = self.get_queryset(*args, **kwargs)
 
         if self.search_text:
-            queryset = self.get_search_result(self.search_text, queryset)
+            queryset = queryset.filter(self.get_q_object(self.search_text))
 
         total = queryset.count()
-        queryset = queryset.order_by(self.sort_field)[self.offset: self.limit + self.offset]
+        queryset = queryset.order_by(
+            self.sort_field)[self.offset: self.limit + self.offset]
 
         data = [self.get_columns(query) for query in queryset]
 
@@ -74,10 +80,17 @@ class DataTableView(TableParamsMixin, View, metaclass=ABCMeta):
 
     @abstractmethod
     def get_columns(self, query):
-        pass
+        """
+        Should return dict, example {'name': query.name, 'phone': query.phone}
+        """
 
-    def get_search_result(self, term, queryset):
-        raise NotImplementedError
+    def get_q_object(self, term):
+        q = Q()
+        for search_field in self.search_fields:
+            search_field = '%__icontains'.format(search_field)
+            q |= Q(**{search_field: term})
+
+        return q
 
     def get_queryset(self, *args, **kwargs):
         """
