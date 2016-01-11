@@ -87,7 +87,7 @@ class DataTableView(TableParamsMixin, View, metaclass=ABCMeta):
     def get_q_object(self, term):
         q = Q()
         for search_field in self.search_fields:
-            search_field = '%__icontains'.format(search_field)
+            search_field = '{}__icontains'.format(search_field)
             q |= Q(**{search_field: term})
 
         return q
